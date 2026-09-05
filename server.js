@@ -10,12 +10,17 @@ const PORT = Number(process.env.PORT || 3100);
 const AMPREM_URL = String(process.env.AMPREM_URL || "").trim().replace(/\/+$/, "");
 const HANDOFF_SECRET = String(process.env.ECOSYSTEM_HANDOFF_SECRET || "").trim();
 const TOKEN_LIST_LIMIT = Math.max(1, Math.min(50, Number(process.env.TOKEN_LIST_LIMIT || 20)));
+const AMPREM_TIMEOUT_MS = Math.max(1000, Math.min(30000, Number(process.env.AMPREM_TIMEOUT_MS || 10000)));
 if (!AMPREM_URL) throw new Error("AMPREM_URL belum dikonfigurasi.");
-try { new URL(AMPREM_URL); } catch { throw new Error("AMPREM_URL harus URL HTTP/HTTPS valid."); }
+try {
+  const parsedAmprem = new URL(AMPREM_URL);
+  if (!/^https?:$/.test(parsedAmprem.protocol)) throw new Error("AMPREM_URL harus HTTP/HTTPS.");
+} catch { throw new Error("AMPREM_URL harus URL HTTP/HTTPS valid."); }
 if (HANDOFF_SECRET.length < 32) throw new Error("ECOSYSTEM_HANDOFF_SECRET harus minimal 32 karakter.");
 
 const app = express();
 app.disable("x-powered-by");
+if (process.env.VERCEL) app.set("trust proxy", 1);
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -43,6 +48,7 @@ function amprem(pathname, options = {}) {
       ...(options.headers || {}),
     },
     cache: "no-store",
+    signal: options.signal || AbortSignal.timeout(AMPREM_TIMEOUT_MS),
   });
 }
 
@@ -57,7 +63,10 @@ app.get("/api/tokens", publicLimiter, async (req, res) => {
     if (!Number.isInteger(limit) || !Number.isInteger(offset)) return res.status(400).json({ ok: false, error: "Pagination tidak valid." });
     const response = await amprem(`/api/public/tokens?limit=${limit}&offset=${offset}`);
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) return res.status(response.status).json(data?.error ? { ok: false, error: data.error } : { ok: false, error: "Token belum dapat dimuat." });
+    if (!response.ok) {
+      if (response.status === 404) return res.status(502).json({ ok: false, code: "AMPREM_ENDPOINT_NOT_FOUND", error: "Endpoint Token di JYY'R Amprem tidak tersedia." });
+      return res.status(response.status).json(data?.error ? { ok: false, error: data.error } : { ok: false, error: "Token belum dapat dimuat." });
+    }
     return res.json(data);
   } catch (error) {
     console.error("[TOKEN CENTER LIST]", { message: error?.message || "Unknown error" });
