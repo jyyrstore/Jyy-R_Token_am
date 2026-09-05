@@ -12,16 +12,34 @@ function toast(message) {
 }
 async function api(path, options = {}) { const response = await fetch(path, { ...options, headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }, cache: "no-store" }); const data = await response.json().catch(() => ({})); return { response, data }; }
 async function inspectHandoff() {
+  const badge = $("#sessionBadge");
+  badge.textContent = "Session tidak terhubung";
+
   const stateParam = new URLSearchParams(location.search).get("state");
   if (!/^[A-Za-z0-9_-]{40,64}$/.test(String(stateParam || ""))) return;
+
   state.handoffState = stateParam;
-  const { response, data } = await api("/api/handoff/inspect", { method: "POST", body: JSON.stringify({ state: stateParam }) });
-  if (response.ok && data.authenticated === true) {
-    state.authenticated = true;
-    $("#sessionBadge").textContent = data.username ? `Session aktif · ${data.username}` : "Session aktif";
-    return;
+
+  try {
+    const { response, data } = await api("/api/handoff/inspect", {
+      method: "POST",
+      body: JSON.stringify({ state: stateParam })
+    });
+
+    if (response.ok && data.authenticated === true) {
+      state.authenticated = true;
+      badge.textContent = data.username
+        ? `Session aktif · ${data.username}`
+        : "Session aktif";
+      return;
+    }
+
+    state.handoffState = null;
+    badge.textContent = "Session tidak valid";
+  } catch {
+    state.handoffState = null;
+    badge.textContent = "Session gagal diverifikasi";
   }
-  state.handoffState = null;
 }
 function durationLabel(token) {
   if (token.duration_label) return token.duration_label;
