@@ -11,14 +11,36 @@ function toast(message) {
   const el = $("#toast"); el.textContent = message; el.classList.add("show"); clearTimeout(window.__toastTimer); window.__toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
 }
 async function api(path, options = {}) { const response = await fetch(path, { ...options, headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }, cache: "no-store" }); const data = await response.json().catch(() => ({})); return { response, data }; }
+async function redirectToAmpremLogin(badge) {
+  badge.textContent = "Menghubungkan ke Amprem…";
+
+  try {
+    const { response, data } = await api("/api/runtime-config");
+    const ampremUrl = String(data?.ampremUrl || "").replace(/\/+$/, "");
+
+    if (!response.ok || !ampremUrl) {
+      throw new Error("URL Amprem belum dikonfigurasi.");
+    }
+
+    const target = new URL("/login.html", ampremUrl);
+    target.searchParams.set("return_to", "token-center");
+    window.location.replace(target.toString());
+  } catch {
+    badge.textContent = "Buka JYY'R Token dari Amprem";
+  }
+}
+
 async function inspectHandoff() {
   const badge = $("#sessionBadge");
-  badge.textContent = "Session tidak terhubung";
 
   const stateParam = new URLSearchParams(location.search).get("state");
-  if (!/^[A-Za-z0-9_-]{40,64}$/.test(String(stateParam || ""))) return;
+  if (!/^[A-Za-z0-9_-]{40,64}$/.test(String(stateParam || ""))) {
+    await redirectToAmpremLogin(badge);
+    return;
+  }
 
   state.handoffState = stateParam;
+  badge.textContent = "Memverifikasi session…";
 
   try {
     const { response, data } = await api("/api/handoff/inspect", {
@@ -79,33 +101,60 @@ async function getToken(tokenId) {
   const button = document.querySelector(`[data-id="${CSS.escape(tokenId)}"]`); if (!button) return;
   button.disabled = true; button.textContent = "Mengambil…";
   try {
+    if (state.handoffState && state.authenticated) {
+      const handoffState = state.handoffState;
+      const consume = await api("/api/handoff/consume", {
+        method: "POST",
+        body: JSON.stringify({ state: handoffState })
+      });
+
+      if (!consume.response.ok || consume.data.authenticated !== true) {
+        state.handoffState = null;
+        state.authenticated = false;
+        throw new Error("Session handoff tidak valid atau sudah kedaluwarsa.");
+      }
+
+      state.handoffState = null;
+
+      const cfg = await api("/api/runtime-config");
+      const amprem = String(cfg.data?.ampremUrl || "").replace(/\/+$/, "");
+      if (!cfg.response.ok || !amprem) {
+        throw new Error("URL Amprem belum dikonfigurasi.");
+      }
+
+      const { response, data } = await api(`/api/tokens/${encodeURIComponent(tokenId)}`);
+      if (!response.ok || !data.token?.token) {
+        await loadTokens();
+        throw new Error(data.error || "Token tidak tersedia.");
+      }
+
+      const token = data.token.token;
+      const copied = await copyToken(token);
+      if (copied) toast("✓ Token berhasil disalin");
+      else toast("Token tidak dapat disalin otomatis. Silakan salin manual.");
+
+      state.selected = data.token;
+      sessionStorage.setItem("jyyr:selected_token_id", data.token.id);
+
+      window.location.assign(
+        `${amprem}/home.html?token_context=${encodeURIComponent(tokenId)}`
+      );
+      return;
+    }
+
     const { response, data } = await api(`/api/tokens/${encodeURIComponent(tokenId)}`);
-    if (!response.ok || !data.token?.token) { await loadTokens(); throw new Error(data.error || "Token tidak tersedia."); }
+    if (!response.ok || !data.token?.token) {
+      await loadTokens();
+      throw new Error(data.error || "Token tidak tersedia.");
+    }
+
     const token = data.token.token;
     const copied = await copyToken(token);
-    if (copied) toast("✓ Token berhasil disalin"); else toast("Token tidak dapat disalin otomatis. Silakan salin manual.");
+    if (copied) toast("✓ Token berhasil disalin");
+    else toast("Token tidak dapat disalin otomatis. Silakan salin manual.");
+
     state.selected = data.token;
     sessionStorage.setItem("jyyr:selected_token_id", data.token.id);
-    if (state.handoffState && state.authenticated) {
-      const consume = await api("/api/handoff/consume", { method: "POST", body: JSON.stringify({ state: state.handoffState }) });
-      state.handoffState = null;
-      if (consume.response.ok && consume.data.authenticated === true) {
-        const target = new URL("/home.html", `${window.__AMPREM_URL || location.origin}`);
-        // Runtime override is supplied through a safe redirect URL on the backend
-        // only in a deployed build; local dev uses the explicit config endpoint below.
-        const fallback = sessionStorage.getItem("jyyr:amprem_url") || null;
-        if (fallback) target.href = `${fallback.replace(/\/+$/, "")}/home.html?token_context=${encodeURIComponent(tokenId)}`;
-        else {
-          const cfg = await api("/api/runtime-config");
-          const amprem = cfg.data?.ampremUrl;
-          if (!amprem) throw new Error("URL Amprem belum dikonfigurasi.");
-          window.location.assign(`${amprem.replace(/\/+$/, "")}/home.html?token_context=${encodeURIComponent(tokenId)}`);
-          return;
-        }
-        window.location.assign(target.href);
-        return;
-      }
-    }
     openUsernameModal();
     $("#usernameInput").dataset.tokenId = tokenId;
   } catch (error) {
