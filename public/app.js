@@ -11,31 +11,18 @@ function toast(message) {
   const el = $("#toast"); el.textContent = message; el.classList.add("show"); clearTimeout(window.__toastTimer); window.__toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
 }
 async function api(path, options = {}) { const response = await fetch(path, { ...options, headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }, cache: "no-store" }); const data = await response.json().catch(() => ({})); return { response, data }; }
-async function redirectToAmpremLogin(badge) {
-  badge.textContent = "Menghubungkan ke Amprem…";
-
-  try {
-    const { response, data } = await api("/api/runtime-config");
-    const ampremUrl = String(data?.ampremUrl || "").replace(/\/+$/, "");
-
-    if (!response.ok || !ampremUrl) {
-      throw new Error("URL Amprem belum dikonfigurasi.");
-    }
-
-    const target = new URL("/login.html", ampremUrl);
-    target.searchParams.set("return_to", "token-center");
-    window.location.replace(target.toString());
-  } catch {
-    badge.textContent = "Buka JYY'R Token dari Amprem";
-  }
-}
 
 async function inspectHandoff() {
   const badge = $("#sessionBadge");
+  state.handoffState = null;
+  state.authenticated = false;
 
   const stateParam = new URLSearchParams(location.search).get("state");
+
   if (!/^[A-Za-z0-9_-]{40,64}$/.test(String(stateParam || ""))) {
-    await redirectToAmpremLogin(badge);
+    // Direct-open Token Center is valid.
+    // Authentication starts only from Amprem's explicit GET TOKEN action.
+    badge.textContent = "Session tidak terhubung";
     return;
   }
 
