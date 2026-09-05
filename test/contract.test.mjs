@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-const root = path.resolve(new URL("..", import.meta.url).pathname);
+import { fileURLToPath } from "node:url";
+const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 test("token center keeps secure flow contracts", () => {
   const server = fs.readFileSync(path.join(root, "server.js"), "utf8");

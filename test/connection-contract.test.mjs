@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const tokenRoot = new URL("../", import.meta.url);
-const ampremRoot = path.resolve(tokenRoot.pathname, "../../amprem/jyyramprem");
+const ampremRoot = path.resolve(fileURLToPath(tokenRoot), "../jyyramprem");
 const tokenServer = fs.readFileSync(new URL("server.js", tokenRoot), "utf8");
 const portalRoutes = fs.readFileSync(path.join(ampremRoot, "api/routes/portal-token.routes.js"), "utf8");
 const appConfig = fs.readFileSync(path.join(ampremRoot, "lib/config/app.config.js"), "utf8");
