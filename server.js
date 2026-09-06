@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -121,6 +122,20 @@ app.post("/api/handoff/consume", publicLimiter, async (req, res) => {
 });
 
 app.get("/api/runtime-config", (_req, res) => res.json({ ok: true, ampremUrl: AMPREM_URL }));
+
+app.get("/api/connectivity", publicLimiter, async (_req, res) => {
+  try {
+    const response = await amprem("/api/health");
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.ok === true && data.database === "connected") {
+      return res.json({ ok: true, database: "connected" });
+    }
+    return res.status(503).json({ ok: false, database: "error" });
+  } catch (error) {
+    console.error("[TOKEN CENTER CONNECTIVITY]", { message: error?.message || "Unknown error" });
+    return res.status(503).json({ ok: false, database: "error" });
+  }
+});
 app.get("/register-redirect", (req, res) => {
   const username = String(req.query.username || "").trim();
   const tokenId = String(req.query.token_id || "").trim();
@@ -133,7 +148,15 @@ app.get("/register-redirect", (req, res) => {
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "jyyr-token-center" }));
-app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+app.get("/", (_req, res) => {
+  try {
+    const html = fs.readFileSync(path.join(__dirname, "public", "index.html"), "utf8");
+    res.type("html").send(html);
+  } catch (error) {
+    console.error("[TOKEN CENTER INDEX]", { message: error?.message || "Unknown error" });
+    res.status(500).send("Token Center unavailable.");
+  }
+});
 
 if (!process.env.VERCEL) app.listen(PORT, () => console.log(`JYY'R Token Center listening on http://localhost:${PORT}`));
 export default app;

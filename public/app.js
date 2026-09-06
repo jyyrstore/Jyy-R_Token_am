@@ -1,5 +1,5 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { tokens: [], selected: null, handoffState: null, authenticated: false, loading: false };
+const state = { tokens: [], selected: null, handoffState: null, authenticated: false, loading: false, online: null };
 
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -12,8 +12,26 @@ function toast(message) {
 }
 async function api(path, options = {}) { const response = await fetch(path, { ...options, headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }, cache: "no-store" }); const data = await response.json().catch(() => ({})); return { response, data }; }
 
-async function inspectHandoff() {
+async function checkConnectivity() {
   const badge = $("#sessionBadge");
+  badge.textContent = "Mengecek koneksi…";
+  try {
+    const { response, data } = await api("/api/connectivity");
+    state.online = response.ok && data.ok === true && data.database === "connected";
+    badge.textContent = state.online ? "● Online" : "● Offline";
+    badge.className = `pill ${state.online ? "online" : "offline"}`;
+    badge.title = state.online
+      ? "Online = koneksi layanan/database sumber data berhasil."
+      : "Offline = koneksi ke layanan/database sumber data gagal.";
+  } catch {
+    state.online = false;
+    badge.textContent = "● Offline";
+    badge.className = "pill offline";
+    badge.title = "Offline = koneksi ke layanan/database sumber data gagal.";
+  }
+}
+
+async function inspectHandoff() {
   state.handoffState = null;
   state.authenticated = false;
 
@@ -22,12 +40,10 @@ async function inspectHandoff() {
   if (!/^[A-Za-z0-9_-]{40,64}$/.test(String(stateParam || ""))) {
     // Direct-open Token Center is valid.
     // Authentication starts only from Amprem's explicit GET TOKEN action.
-    badge.textContent = "Session tidak terhubung";
     return;
   }
 
   state.handoffState = stateParam;
-  badge.textContent = "Memverifikasi session…";
 
   try {
     const { response, data } = await api("/api/handoff/inspect", {
@@ -37,17 +53,12 @@ async function inspectHandoff() {
 
     if (response.ok && data.authenticated === true) {
       state.authenticated = true;
-      badge.textContent = data.username
-        ? `Session aktif · ${data.username}`
-        : "Session aktif";
       return;
     }
 
     state.handoffState = null;
-    badge.textContent = "Session tidak valid";
   } catch {
     state.handoffState = null;
-    badge.textContent = "Session gagal diverifikasi";
   }
 }
 function durationLabel(token) {
@@ -158,5 +169,5 @@ $("#continueRegister").addEventListener("click", () => {
   window.location.assign(`/register-redirect?username=${encodeURIComponent(username)}&token_id=${encodeURIComponent(tokenId)}`);
 });
 $("#closeUsername").addEventListener("click", closeUsernameModal);
-$("#refreshBtn").addEventListener("click", loadTokens);
-(async function boot(){ await inspectHandoff(); await loadTokens(); })();
+$("#refreshBtn").addEventListener("click", () => Promise.all([checkConnectivity(), loadTokens()]));
+(async function boot(){ await Promise.all([checkConnectivity(), inspectHandoff()]); await loadTokens(); })();

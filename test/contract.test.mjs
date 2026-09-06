@@ -14,5 +14,8 @@ test("token center keeps secure flow contracts", () => {
   assert.match(js, /sessionStorage\.setItem\("jyyr:selected_token_id"/);
   assert.match(js, /token_context=/);
   assert.doesNotMatch(js, /redirectToAmpremLogin/);
-  assert.match(js, /Session tidak terhubung/);
+  assert.doesNotMatch(js, /Session tidak terhubung/);
+  assert.match(server, /\/api\/connectivity/);
+  assert.match(js, /● Online/);
+  assert.match(js, /● Offline/);
 });

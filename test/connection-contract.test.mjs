@@ -25,6 +25,13 @@ test("Amprem creates the stateful link consumed by Token Center", () => {
   assert.match(authJs, /AMAuth\.getTokenCenterLink\(\)/);
 });
 
+test("Token Center connectivity status uses Amprem database health", () => {
+  assert.match(tokenServer, /app\.get\("\/api\/connectivity"/);
+  assert.match(tokenServer, /amprem\("\/api\/health"\)/);
+  assert.match(tokenServer, /data\.database === "connected"/);
+  assert.doesNotMatch(tokenServer, /amprem\("\/health"\)/);
+});
+
 test("Token Center proxies the canonical Amprem public-token endpoints", () => {
   assert.match(tokenServer, /\/api\/public\/tokens\?limit=/);
   assert.match(tokenServer, /\/api\/public\/tokens\/\$\{encodeURIComponent\(req\.params\.id\)\}/);
