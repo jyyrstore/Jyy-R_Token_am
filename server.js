@@ -7,11 +7,22 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PORT = Number(process.env.PORT || 3100);
+
+function readIntegerEnv(name, fallback, min, max) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${name} harus integer ${min}-${max}.`);
+  }
+  return value;
+}
+
+const PORT = readIntegerEnv("PORT", 3100, 1, 65535);
 const AMPREM_URL = String(process.env.AMPREM_URL || "").trim().replace(/\/+$/, "");
 const HANDOFF_SECRET = String(process.env.ECOSYSTEM_HANDOFF_SECRET || "").trim();
-const TOKEN_LIST_LIMIT = Math.max(1, Math.min(50, Number(process.env.TOKEN_LIST_LIMIT || 20)));
-const AMPREM_TIMEOUT_MS = Math.max(1000, Math.min(30000, Number(process.env.AMPREM_TIMEOUT_MS || 10000)));
+const TOKEN_LIST_LIMIT = readIntegerEnv("TOKEN_LIST_LIMIT", 20, 1, 50);
+const AMPREM_TIMEOUT_MS = readIntegerEnv("AMPREM_TIMEOUT_MS", 10000, 1000, 30000);
 if (!AMPREM_URL) throw new Error("AMPREM_URL belum dikonfigurasi.");
 try {
   const parsedAmprem = new URL(AMPREM_URL);
@@ -156,6 +167,21 @@ app.get("/", (_req, res) => {
     console.error("[TOKEN CENTER INDEX]", { message: error?.message || "Unknown error" });
     res.status(500).send("Token Center unavailable.");
   }
+});
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  console.error("[TOKEN CENTER ERROR]", {
+    message: error?.message || "Unknown error",
+    path: req.path,
+  });
+  if (req.path.startsWith("/api/")) {
+    return res.status(error?.type === "entity.parse.failed" ? 400 : 500).json({
+      ok: false,
+      error: error?.type === "entity.parse.failed" ? "JSON body tidak valid." : "Terjadi kesalahan pada server.",
+    });
+  }
+  return res.status(500).send("Token Center unavailable.");
 });
 
 if (!process.env.VERCEL) app.listen(PORT, () => console.log(`JYY'R Token Center listening on http://localhost:${PORT}`));

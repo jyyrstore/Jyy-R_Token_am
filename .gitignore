@@ -4,7 +4,5 @@
 node_modules/
 npm-debug.log*
 .DS_Store
-
 .git-old-jyyramprem/
 .vercel/
-.env*

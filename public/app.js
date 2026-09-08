@@ -1,5 +1,5 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { tokens: [], selected: null, handoffState: null, authenticated: false, loading: false, online: null };
+const state = { tokens: [], handoffState: null, authenticated: false, loading: false, online: null };
 
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -131,8 +131,7 @@ async function getToken(tokenId) {
       if (copied) toast("✓ Token berhasil disalin");
       else toast("Token tidak dapat disalin otomatis. Silakan salin manual.");
 
-      state.selected = data.token;
-      sessionStorage.setItem("jyyr:selected_token_id", data.token.id);
+        sessionStorage.setItem("jyyr:selected_token_id", data.token.id);
 
       window.location.assign(
         `${amprem}/home.html?token_context=${encodeURIComponent(tokenId)}`
@@ -151,7 +150,6 @@ async function getToken(tokenId) {
     if (copied) toast("✓ Token berhasil disalin");
     else toast("Token tidak dapat disalin otomatis. Silakan salin manual.");
 
-    state.selected = data.token;
     sessionStorage.setItem("jyyr:selected_token_id", data.token.id);
     openUsernameModal();
     $("#usernameInput").dataset.tokenId = tokenId;
