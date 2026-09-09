@@ -3,37 +3,68 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b1020">
-  <title>JYY'R Token</title>
+  <meta name="theme-color" content="#0b0915">
+  <meta name="description" content="JYY'R Token Center untuk mendapatkan token yang dipublish Owner.">
+  <title>JYY'R Token Center</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
   <main class="shell">
-    <header class="hero">
-      <div class="brand">JYY'R TOKEN</div>
-      <h1>Token Center</h1>
-      <p>Dapatkan token yang sudah dipublish Owner. Token akan otomatis disalin setelah menekan GET TOKEN.</p>
+    <header class="hero panel-surface">
+      <div class="hero-content">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">J</div>
+          <div>
+            <div class="brand">JYY'R TOKEN</div>
+            <div class="eyebrow">SECURE ACCESS CENTER</div>
+          </div>
+        </div>
+        <h1>Token Center</h1>
+        <p>Dapatkan token yang sudah dipublish Owner. Token akan otomatis disalin setelah menekan GET TOKEN.</p>
+      </div>
+      <div class="hero-orbit" aria-hidden="true"><span></span></div>
     </header>
 
-    <section class="toolbar" aria-label="Token Center status">
-      <span id="sessionBadge" class="pill" aria-label="Status koneksi">Mengecek koneksi…</span>
-      <button id="refreshBtn" class="btn secondary" type="button">Refresh</button>
+    <section class="toolbar panel-surface" aria-label="Token Center status">
+      <div class="toolbar-context">
+        <span class="section-kicker">SYSTEM STATUS</span>
+        <span id="sessionBadge" class="pill" aria-label="Status koneksi">Mengecek koneksi…</span>
+      </div>
+      <button id="refreshBtn" class="btn secondary" type="button" aria-label="Refresh data token dan status koneksi">
+        <span class="btn-icon" aria-hidden="true">↻</span>
+        <span>Refresh</span>
+      </button>
     </section>
 
     <section id="status" class="status" aria-live="polite"></section>
+    <section class="list-header" aria-hidden="true">
+      <div>
+        <span class="section-kicker">PUBLISHED TOKENS</span>
+        <span class="list-caption">Pilih token yang tersedia untuk melanjutkan.</span>
+      </div>
+      <span class="list-accent"></span>
+    </section>
     <section id="tokenList" class="token-list" aria-live="polite"></section>
-    <div id="empty" class="empty" hidden>Belum ada token yang tersedia saat ini.</div>
+    <div id="empty" class="empty panel-surface" hidden>
+      <div class="empty-mark" aria-hidden="true">—</div>
+      <strong>Belum ada token tersedia</strong>
+      <span>Coba refresh kembali saat token baru sudah dipublish.</span>
+    </div>
   </main>
 
   <div id="usernameModal" class="modal" hidden aria-hidden="true">
     <div class="backdrop"></div>
     <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="usernameTitle">
+      <div class="dialog-accent" aria-hidden="true"></div>
       <button id="closeUsername" class="icon" type="button" aria-label="Tutup">×</button>
       <span class="eyebrow">JYY'R AMPREM</span>
       <h2 id="usernameTitle">Buat Username</h2>
       <p>Username ini hanya menjadi prefill saat Anda masuk ke halaman Register Amprem.</p>
       <label for="usernameInput">Username</label>
-      <input id="usernameInput" maxlength="30" autocomplete="username" placeholder="@jyyyr">
+      <input id="usernameInput" maxlength="30" autocomplete="username" placeholder="@jyyyr" aria-describedby="usernameStatus">
       <div id="usernameStatus" class="inline-status" aria-live="polite"></div>
       <button id="continueRegister" class="btn primary full" type="button">Lanjut Daftar</button>
     </section>

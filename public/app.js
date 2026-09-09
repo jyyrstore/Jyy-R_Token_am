@@ -72,10 +72,10 @@ function render() {
   list.innerHTML = state.tokens.map((token) => {
     const status = token.status || "unknown";
     const available = status === "active";
-    const statusLabel = available ? "🟢 Tersedia" : status === "used" ? "🔴 Digunakan" : status === "expired" ? "⚪ Kedaluwarsa" : `⚪ ${escapeHtml(status)}`;
+    const statusLabel = available ? "Tersedia" : status === "used" ? "Digunakan" : status === "expired" ? "Kedaluwarsa" : escapeHtml(status);
     const claimant = token.claimed_username ? `<span>${escapeHtml(token.claimed_username)}</span>` : "";
     const action = available && token.token ? `<button class="btn primary get-token" data-id="${escapeHtml(token.id)}" type="button">GET TOKEN</button>` : "";
-    return `<article class="token-card"><div class="row"><span class="lifetime">🔒 ${escapeHtml(durationLabel(token))}</span><span class="badge ${available ? "available" : status}">${statusLabel}</span></div><div class="token">${escapeHtml(token.token || "Token tidak tersedia")}</div><div class="row"><div class="meta"><span>${claimant}</span></div>${action}</div></article>`;
+    return `<article class="token-card"><div class="row"><span class="lifetime">${escapeHtml(durationLabel(token))}</span><span class="badge ${available ? "available" : status}">${statusLabel}</span></div><div class="token">${escapeHtml(token.token || "Token tidak tersedia")}</div><div class="row"><div class="meta"><span>${claimant}</span></div>${action}</div></article>`;
   }).join("");
   list.querySelectorAll(".get-token").forEach((button) => button.addEventListener("click", () => getToken(button.dataset.id)));
 }
