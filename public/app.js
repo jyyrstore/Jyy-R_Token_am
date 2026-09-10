@@ -65,17 +65,47 @@ function durationLabel(token) {
   if (token.duration_label) return token.duration_label;
   return token.duration === "permanent" ? "Unlimited" : token.duration || "Lifetime";
 }
+function firstTimestamp(token, keys = []) {
+  for (const key of keys) {
+    const value = token?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return null;
+}
+function formatTimestamp(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta"
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${get("day")} ${get("month")} ${get("year")} • ${get("hour")}:${get("minute")} WIB`;
+}
 function render() {
   const list = $("#tokenList"); const empty = $("#empty");
   if (!state.tokens.length) { list.innerHTML = ""; empty.hidden = false; return; }
   empty.hidden = true;
   list.innerHTML = state.tokens.map((token) => {
-    const status = token.status || "unknown";
+    const status = String(token.status || "unknown");
     const available = status === "active";
+    const statusClass = ["active", "used", "expired", "revoked"].includes(status) ? status : "unknown";
     const statusLabel = available ? "Tersedia" : status === "used" ? "Digunakan" : status === "expired" ? "Kedaluwarsa" : escapeHtml(status);
-    const claimant = token.claimed_username ? `<span>${escapeHtml(token.claimed_username)}</span>` : "";
+    const publishedAt = formatTimestamp(firstTimestamp(token, ["published_at", "publishedAt", "token_published_at", "tokenPublishedAt", "created_at", "createdAt"]));
+    const claimedAt = formatTimestamp(firstTimestamp(token, ["claimed_at", "claimedAt", "used_at", "usedAt", "consumed_at", "consumedAt"]));
+    const claimant = token.claimed_username ? `<span class="meta-label">Digunakan oleh</span><span>${escapeHtml(token.claimed_username)}</span>` : "";
+    const publishedMeta = publishedAt ? `<div class="timestamp"><span aria-hidden="true">◷</span><span>Dipublish ${escapeHtml(publishedAt)}</span></div>` : "";
+    const claimedMeta = !available && claimedAt ? `<div class="timestamp claimed-at"><span aria-hidden="true">✓</span><span>Diambil ${escapeHtml(claimedAt)}</span></div>` : "";
     const action = available && token.token ? `<button class="btn primary get-token" data-id="${escapeHtml(token.id)}" type="button">GET TOKEN</button>` : "";
-    return `<article class="token-card"><div class="row"><span class="lifetime">${escapeHtml(durationLabel(token))}</span><span class="badge ${available ? "available" : status}">${statusLabel}</span></div><div class="token">${escapeHtml(token.token || "Token tidak tersedia")}</div><div class="row"><div class="meta"><span>${claimant}</span></div>${action}</div></article>`;
+    const metaBlock = claimant || claimedMeta ? `<div class="row meta-row"><div class="meta">${claimant}</div>${claimedMeta}</div>` : "";
+    const tokenValue = escapeHtml(token.token || "Token tidak tersedia");
+    return `<article class="token-card"><div class="row"><span class="lifetime">${escapeHtml(durationLabel(token))}</span><span class="badge ${available ? "available" : statusClass}">${statusLabel}</span></div>${publishedMeta}<div class="token-action-row"><div class="token">${tokenValue}</div>${action}</div>${metaBlock}</article>`;
   }).join("");
   list.querySelectorAll(".get-token").forEach((button) => button.addEventListener("click", () => getToken(button.dataset.id)));
 }
