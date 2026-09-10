@@ -1,5 +1,16 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { tokens: [], handoffState: null, authenticated: false, loading: false, online: null };
+const state = {
+  tokens: [],
+  handoffState: null,
+  authenticated: false,
+  loading: false,
+  online: null,
+  currentPage: 1,
+  pageSize: 5,
+  fetchOffset: 0,
+  hasMore: false,
+  fetchingMore: false
+};
 
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -88,11 +99,64 @@ function formatTimestamp(value) {
   const get = (type) => parts.find((part) => part.type === type)?.value || "";
   return `${get("day")} ${get("month")} ${get("year")} • ${get("hour")}:${get("minute")} WIB`;
 }
+function getLoadedPageCount() {
+  return Math.max(1, Math.ceil(state.tokens.length / state.pageSize));
+}
+function getVisibleTokens() {
+  const start = (state.currentPage - 1) * state.pageSize;
+  return state.tokens.slice(start, start + state.pageSize);
+}
+function buildPaginationModel(totalPages) {
+  if (totalPages <= 1) return [];
+  let start = state.currentPage <= 3 ? 1 : Math.min(state.currentPage, Math.max(1, totalPages - 2));
+  const pages = [];
+  for (let page = start; page <= Math.min(totalPages, start + 2); page += 1) pages.push(page);
+  return pages;
+}
+function renderPagination() {
+  const pagination = $("#pagination");
+  const totalPages = getLoadedPageCount();
+  if (!state.tokens.length || (totalPages <= 1 && !state.hasMore)) {
+    pagination.hidden = true;
+    pagination.innerHTML = "";
+    return;
+  }
+
+  pagination.hidden = false;
+  const pages = buildPaginationModel(totalPages);
+  const showPrevious = state.currentPage >= 4;
+  const showFirst = state.currentPage >= 5;
+  const showNext = state.currentPage < totalPages || state.hasMore;
+  const showLast = state.hasMore || state.currentPage < totalPages;
+
+  const navButton = (label, page, title, hidden = false, className = "") => hidden ? "" : `
+    <button class="page-btn nav-btn ${className}" type="button" data-page="${page}" aria-label="${title}" title="${title}">${label}</button>`;
+  const pageButton = (page) => `
+    <button class="page-btn ${page === state.currentPage ? "current" : ""}" type="button" data-page="${page}" aria-label="Halaman ${page}" aria-current="${page === state.currentPage ? "page" : "false"}">${page}</button>`;
+
+  pagination.innerHTML = [
+    navButton("&lt;", state.currentPage - 1, "Previous", !showPrevious),
+    navButton("&lt;&lt;", 1, "First", !showFirst),
+    ...pages.map(pageButton),
+    navButton("&gt;", state.currentPage + 1, "Next", !showNext),
+    navButton("&gt;&gt;", 0, "Last", !showLast, "last-btn")
+  ].join("");
+
+  pagination.querySelectorAll(".page-btn").forEach((button) => {
+    button.addEventListener("click", () => handlePagination(button.dataset.page));
+  });
+}
 function render() {
   const list = $("#tokenList"); const empty = $("#empty");
-  if (!state.tokens.length) { list.innerHTML = ""; empty.hidden = false; return; }
+  if (!state.tokens.length) {
+    list.innerHTML = "";
+    empty.hidden = false;
+    renderPagination();
+    return;
+  }
   empty.hidden = true;
-  list.innerHTML = state.tokens.map((token) => {
+  const visibleTokens = getVisibleTokens();
+  list.innerHTML = visibleTokens.map((token) => {
     const status = String(token.status || "unknown");
     const available = status === "active";
     const statusClass = ["active", "used", "expired", "revoked"].includes(status) ? status : "unknown";
@@ -108,15 +172,80 @@ function render() {
     return `<article class="token-card"><div class="row"><span class="lifetime">${escapeHtml(durationLabel(token))}</span><span class="badge ${available ? "available" : statusClass}">${statusLabel}</span></div>${publishedMeta}<div class="token-action-row"><div class="token">${tokenValue}</div>${action}</div>${metaBlock}</article>`;
   }).join("");
   list.querySelectorAll(".get-token").forEach((button) => button.addEventListener("click", () => getToken(button.dataset.id)));
+  renderPagination();
 }
-async function loadTokens() {
-  if (state.loading) return; state.loading = true; setStatus("Memuat token…");
+async function fetchTokenBatch(offset) {
+  const { response, data } = await api(`/api/tokens?limit=50&offset=${offset}`);
+  if (!response.ok) throw new Error(data.error || "Token belum dapat dimuat.");
+  const batch = Array.isArray(data.tokens) ? data.tokens : [];
+  state.fetchOffset = offset + batch.length;
+  state.hasMore = batch.length === 50;
+  return batch;
+}
+async function loadTokens({ preservePage = false } = {}) {
+  if (state.loading || state.fetchingMore) return;
+  state.loading = true;
+  if (!preservePage) state.currentPage = 1;
+  setStatus("Memuat token…");
   try {
-    const { response, data } = await api("/api/tokens?limit=50&offset=0");
-    if (!response.ok) throw new Error(data.error || "Token belum dapat dimuat.");
-    state.tokens = Array.isArray(data.tokens) ? data.tokens : [];
-    render(); setStatus("");
-  } catch (error) { setStatus(error.message || "Token belum dapat dimuat.", "error"); } finally { state.loading = false; }
+    const batch = await fetchTokenBatch(0);
+    state.tokens = batch;
+    render();
+    setStatus("");
+  } catch (error) {
+    setStatus(error.message || "Token belum dapat dimuat.", "error");
+  } finally {
+    state.loading = false;
+  }
+}
+async function ensurePageLoaded(page) {
+  const requiredCount = page * state.pageSize;
+  while (state.tokens.length < requiredCount && state.hasMore) {
+    const batch = await fetchTokenBatch(state.fetchOffset);
+    if (!batch.length) break;
+    state.tokens.push(...batch);
+    if (!state.hasMore) break;
+  }
+  return state.tokens.length >= requiredCount || !state.hasMore;
+}
+async function loadAllTokens() {
+  while (state.hasMore) {
+    const batch = await fetchTokenBatch(state.fetchOffset);
+    if (!batch.length) break;
+    state.tokens.push(...batch);
+  }
+}
+async function handlePagination(target) {
+  if (state.fetchingMore || state.loading) return;
+  const requested = Number(target);
+  const isLast = target === "0";
+
+  state.fetchingMore = true;
+  const pagination = $("#pagination");
+  pagination.querySelectorAll(".page-btn").forEach((button) => {
+    button.disabled = true;
+    button.classList.add("busy");
+  });
+
+  try {
+    setStatus(isLast ? "Menyiapkan halaman terakhir…" : "");
+    if (isLast) {
+      await loadAllTokens();
+      state.currentPage = getLoadedPageCount();
+    } else {
+      const targetPage = Math.max(1, requested);
+      await ensurePageLoaded(targetPage);
+      const totalPages = getLoadedPageCount();
+      state.currentPage = Math.min(targetPage, totalPages);
+    }
+    render();
+    setStatus("");
+    $("#tokenList")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message || "Halaman token belum dapat dimuat.", "error");
+  } finally {
+    state.fetchingMore = false;
+  }
 }
 async function copyToken(value) {
   try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); return true; } } catch {}
